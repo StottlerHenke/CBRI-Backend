@@ -3,7 +3,7 @@ CBR Insight: Measure Source Code Quality
 
 ## Prerequisites
 
-1. Install Understand from [SciTools](https://scitools.com/).
+1. Install a licensed copy of Understand from [SciTools](https://scitools.com/).
 
 2. Setup CBRI_UND and CBRI_UPERL environment variables that point 
 to the location of the Understand 'und' and 'uperl' tools. 
@@ -14,7 +14,7 @@ export CBRI_UND=/Applications/Understand.app/Contents/MacOS/und`
 
 3. Install Python 3.
 
-4. Install the PyCharm IDE (optional)
+4. Install the PyCharm IDE (optional, but helpful)
 
 ## Checkout and Configuration
 
@@ -38,7 +38,7 @@ local_settings.ini.
 1. Run the CBRI-Backend configuration to start the server.
 ![](./images/Run1.png)
 
-2. Run manage.py (first image) and then run ‘process_tasks’ 
+2. Run manage.py (first image) and then run `process_tasks` 
 (second image) to start the task manager that performs the 
 long-running analysis jobs.
 ![](./images/Run2a.png)
