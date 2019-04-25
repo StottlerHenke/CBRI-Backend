@@ -23,7 +23,7 @@ export CBRI_UND=/Applications/Understand.app/Contents/MacOS/und`
 2. Use PyCharm to setup a Python 3 virtual environment and 
 install all packages in requirements.txt.
 
-3. Create a mail server account for CBRI and change settings in 
+3. Create a mail server account for CBRI (e.g. on your mail server or using Gmail) and change settings in 
 local_settings.ini.
 ![](./images/Setup2.png)
 
