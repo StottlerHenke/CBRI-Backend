@@ -127,6 +127,7 @@ class Measurement(models.Model):
     is_baseline = models.BooleanField(default=False)
     # Convenience for scoring logic, write only for the API
     is_core = models.BooleanField()
+    components_str = models.TextField(default="", blank=True)
 
     def __str__(self):
         return self.date.strftime("%B %d, %Y")
@@ -174,8 +175,12 @@ class Measurement(models.Model):
             # Jenkins plugin provides a dict with all of the correct fields, but no component measures
             model_fields = metrics
             measurement = Measurement.objects.create(**model_fields)
-            # Create empty component measures for treemap
-            metrics['Components'] = make_tree_map(empty_tree)
+            treemapdata = metrics.get('components_str')
+            # Create the treemap, making an empty one if data not passed in by Jenkins
+            if treemapdata:
+                metrics['Components'] = make_tree_map(treemapdata)
+            else:
+                metrics['Components'] = make_tree_map(empty_tree)
         else:
             # Convert from Understand/Github fields to CBRI fields, along with the treemap component measures
             num_files = metrics["Files"]

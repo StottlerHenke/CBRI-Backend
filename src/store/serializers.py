@@ -162,7 +162,7 @@ MEASUREMENT_FIELDS = ('date', 'revision_id', 'architecture_type', 'propagation_c
                       'useful_lines_of_code', 'num_classes', 'num_files', 'core_size',
                       'num_files_in_core', 'num_files_overly_complex', 'percent_files_overly_complex',
                       'useful_lines_of_comments', 'useful_comment_density',
-                      'duplicate_uloc', 'percent_duplicate_uloc', 'is_core')
+                      'duplicate_uloc', 'percent_duplicate_uloc', 'is_core', 'components_str')
 
 
 class MeasurementSerializer(serializers.HyperlinkedModelSerializer):
