@@ -2,7 +2,7 @@
 VERSION_NAME = "CBRI REST API"
 VERSION_MAJOR = "1"
 VERSION_MINOR = "2"
-VERSION_BUILD = "2"
+VERSION_BUILD = "3"
 
 
 def get_version():
