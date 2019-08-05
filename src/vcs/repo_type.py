@@ -26,7 +26,7 @@ def get_auth_address(address: str, token: str) -> str:
     elif "http://" in address:
         return address.replace("http://", "http://" + token + "@")
     elif "https://" in address:
-        return address.replace("http://", "http://" + token + "@")
+        return address.replace("https://", "https://" + token + "@")
     else:
         raise Exception("Tokens can only be applied to http or https repositories.")
 
