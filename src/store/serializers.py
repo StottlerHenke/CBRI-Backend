@@ -8,7 +8,7 @@ from analysis import understand_analysis
 from analysis.manager.analysis_manager_factory import get_analysis_manager
 from analysis.manager.fake_analysis_manager import FakeAnalysisManager
 from analysis.tree_helper import make_tree_map, empty_tree
-from cbri.reporting import UserNotification, logger
+from cbri.reporting import UserNotification, logger, log_to_repo
 from store.requests import get_user_email
 from vcs.repo_type import get_repo_type
 from .models import *
@@ -120,8 +120,12 @@ class RepositorySerializer(serializers.HyperlinkedModelSerializer):
 
     def create(self, validated_data):
 
-        # TODO: Remove token from print version
-        logger.info("Creating repo: " + str(validated_data))
+        # Remove token from print version
+        print_data = validated_data.copy()
+        print_data['token'] = "..."
+
+        log_msg = "Creating repo: " + str(print_data)
+        logger.info(log_msg)
 
         # Clean up common little problems with address
         address = validated_data.get("address")
@@ -142,6 +146,9 @@ class RepositorySerializer(serializers.HyperlinkedModelSerializer):
         current_user_email = self.get_current_user_email()
         if current_user_email:
             validated_data["allowed_emails"] = [current_user_email,]
+
+        # Add in the log string
+        validated_data['log'] = log_msg
 
         # Make the repo per usual
         repo = Repository.objects.create(**validated_data)

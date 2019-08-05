@@ -1,5 +1,6 @@
 import smtplib
 import logging
+import datetime
 from email.mime.text import MIMEText
 
 from cbri.version import get_version
@@ -13,6 +14,19 @@ Responsible for notifying the user via logging and email.
 logger = logging.getLogger('cbri')
 logger.info(get_version())
 logger.info("Using config file: " + config_file_dir)
+
+
+def log_to_repo(repo, log_msg : str, exception=False):
+    """Log repo-specific information to the repo itself for console-style reporting"""
+    if exception:
+        logger.exception(log_msg)
+    else:
+        logger.info(log_msg)
+
+    date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    repo.log = repo.log + "\n" + date_str + log_msg
+    repo.save()
+
 
 class UserNotification:
     """ Send the user an email when certain events occur """
