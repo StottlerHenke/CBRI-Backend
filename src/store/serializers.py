@@ -100,7 +100,7 @@ class RepositorySerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Repository
         fields = (URL, 'id', 'name', 'organization', 'description', 'topics', 'language', 'address',
-                  'allowed_emails', 'measurements', 'benchmarks', 'benchmarkdescription', 'token')
+                  'allowed_emails', 'measurements', 'benchmarks', 'benchmarkdescription', 'token', 'log')
         extra_kwargs = {
             'token': {'write_only': True}
         }

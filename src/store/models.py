@@ -47,6 +47,8 @@ class Repository(models.Model):
     type = EnumField(RepoType)
     description = BleachField()
     token = BleachField(blank=True, max_length=DEFAULT_CHAR_LENGTH)
+    # Console-like logging
+    log = BleachField(max_length=DEFAULT_CHAR_LENGTH, default="")
     # Space separated list of topics as seen on github
     topics = BleachField(blank=True)
     # TODO: Use choices rather than free text? -djc 2018-02-26
@@ -55,9 +57,6 @@ class Repository(models.Model):
     # Users with these email addresses can access the repo, or any user
     # if empty
     allowed_emails = MultiEmailField()
-    # TODO: How to do authentication? username/password/token
-    # -I think we'll ignore it and make the user set up ssh keys, or tie into
-    # gradle or something instead -djc 2018-06-18
 
     class Meta:
         verbose_name_plural = 'Repositories'
