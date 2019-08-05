@@ -68,7 +68,9 @@ class BenchmarkGenerator:
         # add data to the description object
         description.num_projects = len(df_cases)
         description_columns = ['project_name', 'useful_lines_of_code_(uloc)', 'core', 'core_size', 'propagation_cost',
-                               'percent_files_overly_complex', 'percent_duplicate_uloc', 'useful_comment_density', 'topics'  ]
+                               'percent_files_overly_complex', 'percent_duplicate_uloc', 'useful_comment_density',
+                               'overall_score','architecture_score','complexity_score','clarity_score',
+                               'topics'] # Front end code assumes topics is last.
         description.project_data = df_cases[description_columns].to_csv()
 
         if len(df_cases) < 1:
