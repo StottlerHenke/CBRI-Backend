@@ -189,6 +189,9 @@ class MeasurementSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Measurement
         fields = (URL, 'repository') + MEASUREMENT_FIELDS + ('component_measurements', 'scores', 'revision_id', 'is_baseline')
+        extra_kwargs = {
+            'components_str': {'write_only': True}
+        }
 
     fake_weeks = None
 
