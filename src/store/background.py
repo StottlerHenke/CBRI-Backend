@@ -2,7 +2,7 @@ from rest_framework.exceptions import ValidationError
 from uuid import UUID
 
 from analysis.manager.analysis_manager_factory import get_analysis_manager
-from cbri.reporting import UserNotification, logger
+from cbri.reporting import UserNotification, log_to_repo
 from .models import Repository, Measurement
 
 from background_task import background
@@ -24,7 +24,7 @@ def update_repo(repo_id: str, temp_measurement_id: str, current_user_email: str)
     if temp_measurement:
         temp_measurement.delete()
 
-    logger.info("Started update analysis for: " + repo.name)
+    log_to_repo(repo, "Started update analysis for: " + repo.name)
 
     un = UserNotification()
     measurement_error = None
@@ -32,7 +32,7 @@ def update_repo(repo_id: str, temp_measurement_id: str, current_user_email: str)
     try:
         measurement = get_analysis_manager(repo).make_measurement()
     except Exception as e:
-        logger.exception(str(e))
+        log_to_repo(repo, str(e), exception=True)
         measurement_error = ValidationError("ANALYSIS ERROR: " + str(e))
 
     # Notify user of success or failure.
@@ -42,9 +42,9 @@ def update_repo(repo_id: str, temp_measurement_id: str, current_user_email: str)
         else:
             un.send_repo_update_failed_email(current_user_email, repo.name, str(measurement_error))
     except Exception as e:
-        logger.exception(str(e))
+        log_to_repo(repo, str(e), exception=True)
 
-    logger.info("Completed update analysis for: " + repo.name)
+    log_to_repo(repo, "Completed update analysis for: " + repo.name)
 
 
 @background(schedule=10)
@@ -54,7 +54,7 @@ def create_history(repo_id: str, current_user_email: str):
     if not repo:
         return;
 
-    logger.info("Started history analysis for: " + repo.name)
+    log_to_repo(repo, "Started history analysis for: " + repo.name)
 
     un = UserNotification()
     measurement_error = None
@@ -64,7 +64,7 @@ def create_history(repo_id: str, current_user_email: str):
         # If something went wrong with the history, don't make the
         # project because it's confusing to see it there Awaiting measurements
         # -djc 2018-07-20
-        logger.exception(str(e))
+        log_to_repo(repo, str(e), exception=True)
         measurement_error = ValidationError("ANALYSIS ERROR: " + str(e))
         repo.delete()
 
@@ -75,6 +75,6 @@ def create_history(repo_id: str, current_user_email: str):
         else:
             un.send_repo_create_failed_email(current_user_email, repo.name, str(measurement_error))
     except Exception as e:
-        logger.exception(str(e))
+        log_to_repo(repo, str(e), exception=True)
 
-    logger.info("Completed history analysis for: " + repo.name)
+    log_to_repo(repo, "Completed history analysis for: " + repo.name)
