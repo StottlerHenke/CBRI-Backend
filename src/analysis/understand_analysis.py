@@ -269,7 +269,7 @@ def run_understand(project_name, lang, code_dir, data_dir, und_dir):
 
     # Generate core metrics to the specified output
     logger.info("\tCore metrics: " + code_dir)
-    uperl_command = uperl + " " + CBRI_PLUGIN_DIR + "CoreMetrics_v1.20.pl -db " + und_db + " -createMetrics -DuplicateMinLines 10 -outputDir " + data_dir
+    uperl_command = uperl + " " + CBRI_PLUGIN_DIR + "CoreMetrics_v1.23.pl -db " + und_db + " -createMetrics -DuplicateMinLines 10 -outputDir " + data_dir
     uperl_command_split = shlex.split(uperl_command)
     logger.info("Uperl command is:" +  str(uperl_command))
 
