@@ -24,8 +24,10 @@ def log_to_repo(repo, log_msg : str, exception=False):
         logger.info(log_msg)
 
     date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    repo.log = repo.log + "\n" + date_str + log_msg
+    repo.log = repo.log + "\n" + date_str + " " + log_msg
+
     repo.save()
+    logger.info(repo.log)
 
 
 class UserNotification:
