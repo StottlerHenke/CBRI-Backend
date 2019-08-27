@@ -3,6 +3,8 @@ import logging
 import datetime
 from email.mime.text import MIMEText
 
+from django.utils import timezone
+
 from cbri.version import get_version
 from cbri.settings import CBRI_EMAIL, CBRI_PASSWORD, CBRI_SMTP, CBRI_FRONT_END, config_file_dir
 
@@ -23,8 +25,9 @@ def log_to_repo(repo, log_msg : str, exception=False):
     else:
         logger.info(log_msg)
 
-    date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    repo.log = repo.log + "\n" + date_str + " " + log_msg
+    d = timezone.now().replace(minute=0, second=0, microsecond=0)
+    date_str = d.strftime("%Y-%m-%d %H:%M")
+    repo.log = repo.log + '\n' + date_str + " " + log_msg
 
     repo.save()
     logger.info(repo.log)
