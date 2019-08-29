@@ -16,7 +16,7 @@ class UndFileAnalysisManager(UndAnalysisManager):
         repo_address = repo_address.replace('file://', '')
         logger.info("Copying from " + str(repo_address) + " to " + str (code_dir))
         shutil.copytree(repo_address, code_dir)
-        return "Not from a VCS"
+        return "No VCS"
 
     def make_history(self) -> list:
         """For a file repo, the history is just what we see right now.
