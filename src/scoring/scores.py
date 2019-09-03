@@ -20,22 +20,22 @@ class ScoreGenerator:
         clarity = self.get_clarity_score(benchmarks, description, measurement, explanation=explanations) # 0 or 1
         clarity = round(clarity, precision)
         values['clarity'] = clarity
-        score['clarity'] = self.get_clarity_letter(clarity, grade_percentiles['clarity'])
+        score['clarity'] = self.__get_letter(clarity, grade_percentiles['clarity'])
 
         complexity = self.get_complexity_score(benchmarks, description, measurement, explanation=explanations) # 0, 1, or 2
         complexity = round(complexity, precision)
         values['complexity'] = complexity
-        score['complexity'] = self.get_complexity_letter(complexity, grade_percentiles['complexity'])
+        score['complexity'] = self.__get_letter(complexity, grade_percentiles['complexity'])
 
         arch = self.get_architecture_score(benchmarks, description, measurement, explanation=explanations) # 0, 1, 2, or 3
         arch = round(arch, precision)
         values['architecture'] = arch
-        score['architecture'] = self.get_architecture_letter(arch, grade_percentiles['architecture'])
+        score['architecture'] = self.__get_letter(arch, grade_percentiles['architecture'])
 
         overall = clarity + complexity + arch
         overall = round(overall, precision)
         values['overall'] = overall
-        score['overall'] = self.get_overall_letter(overall, grade_percentiles['overall'])
+        score['overall'] = self.__get_letter(overall, grade_percentiles['overall'])
 
         return score, values, explanations
 
@@ -56,27 +56,8 @@ class ScoreGenerator:
             grade = 'F'
         return grade
 
-    def get_clarity_letter(self, score, grades):
-        """ Clarity is a single score randing from 0-1 """
-        grade = self.__get_letter(score, grades)
-        return grade
 
-    def get_complexity_letter(self, score, grades):
-        """ Complexity combines two scores, ranging from 0-2 """
-        grade = self.__get_letter(score, grades)
-        return grade
-
-    def get_architecture_letter(self, score, grades):
-        """ Architecture combines two scores, ranging from 0-2 """
-        grade = self.__get_letter(score, grades)
-        return grade
-
-    def get_overall_letter(self, score, grades):
-        """ Overall combines all scores, ranging from 0-5"""
-        grade = self.__get_letter(score, grades)
-        return grade
-
-    def compare_to_upper(self, benchmarks, description, measurement, field, explanation={}):
+    def compare_to_upper(self, benchmarks, description, measurement, field, explanation):
         """ Score a measurement relative to the benchmarks - lower score is better """
         field_value = float(measurement[field])
 
@@ -114,21 +95,15 @@ class ScoreGenerator:
     def get_complexity_score(self, benchmarks, description, measurement, explanation={}):
         complexity = 0;
         complexity += self.compare_to_upper(benchmarks, description, measurement, 'percent_files_overly_complex',
-                                            explanation=explanation)
+                                            explanation)
         complexity += self.compare_to_upper(benchmarks, description, measurement, 'percent_duplicate_uloc',
-                                            explanation=explanation)
+                                            explanation)
         return complexity
 
     def get_architecture_score(self, benchmarks, description, measurement, explanation={}):
         arch = 0
         arch += self.compare_to_upper(benchmarks, description, measurement, 'propagation_cost', explanation)
-
-        if measurement['is_core'] is False:
-            arch += 1.0
-            explanation['core'] = "Core type of architecture is False, full credit for core size"
-        else:
-            explanation['core'] = "Core type of architecture is True, measuring core size"
-            arch += self.compare_to_upper(benchmarks, description, measurement, 'core_size', explanation)
+        arch += self.compare_to_upper(benchmarks, description, measurement, 'core_size', explanation)
 
         return arch
 
