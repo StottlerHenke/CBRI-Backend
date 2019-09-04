@@ -141,21 +141,8 @@ def get_metrics_for_project(project_name, data_dir, output):
             core = False;
         output['Core'] = core
 
-        if core:
-            for key, value in metricsDict.items():
-                if key == "Overly Complex Central Files" or key == "Central Size":
-                    continue  # i.e. don't print these two
-                output[key] = value
-        else:  # Swap Central into Core
-            for key, value in metricsDict.items():
-                if key == "Overly Complex Core Files" or key == "Core Size":
-                    continue
-                elif key == "Overly Complex Central Files":
-                    output["Overly Complex Core Files"] = value
-                elif key == "Central Size":
-                    output["Core Size"] = value
-                else:
-                    output[key] = value
+        for key, value in metricsDict.items():
+            output[key] = value
 
     return output
 
