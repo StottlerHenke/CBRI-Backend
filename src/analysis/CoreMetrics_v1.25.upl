@@ -26,14 +26,14 @@
 # 1.22 Handle Javascript Class-Functions correctly
 # 1.23 Add more decimal values to propagation cost
 # 1.24 Always show the core size metrics, even if not a core-periphery project
-our $version = "1.24";
+# 1.25 Add secondary core groups - cyclic groups in the program that many other components interact with. Note in original papers 2019-09-06
+our $version = "1.25";
 
 use strict;
 use Data::Dumper;
 use List::Util qw( min max sum);
 use File::Basename;
-use Getopt::Long;
-use Understand;
+use base ("Understand::IReport");
 
 #************************** Globals *****************************
 our $funcKindString = "ada entry, ada function, ada package, ada procedure, ada protected, ada task,"
@@ -62,16 +62,15 @@ our @matches;  #array to track duplicate lines
 our %codeHashes; #Hash for tracking all code locations for building duplicate list
 our $minDupLines; #Minimum # lines to match for duplicates
 our $minDupChars=20; #Minimum # characters to match for duplicates
-my $dbPath;
-my $help;
-my %options;
 
-
-#************************* Main *********************************
-my $report = convertIreport->new();
-init($report);
-setupOptions();
-generate($report);
+# Subroutines needed to work as an Interactive Report
+sub name { return "Core Metrics Report";}
+sub test_entity {return 0;}
+sub test_architecture { return 0;}
+sub test_global { return 1;}
+sub support_progress { return 1; }
+sub support_abort { return 1; }
+sub abort{$abort_called=1;}
 
 
 sub generate {
@@ -114,11 +113,11 @@ sub generate {
   
   #Check file locations
   if (! $outputDir){
-    die usage("Specify Output Directory in options to save files\n");
+    die("Specify Output Directory in options to save files");
   }elsif($outputDir){
     my $success = mkdir("$outputDir");
     if (!$success && ! -e $outputDir){
-      die usage("Could not create $outputDir, $!\n");
+      die("Could not create $outputDir, $!");
     }
   }
   
@@ -321,8 +320,8 @@ sub generate {
     if ($cyclicGroups{$largestGroupID}{size} >= $fileCount *.06){
       $projectArchitectType = "Core-Periphery";
     }
-      $coreGroup = $largestGroupID;
-    }
+    $coreGroup = $largestGroupID;
+  }
 
   #Median Partition Component Types
   #First calculate the median VFI and VFO
@@ -390,7 +389,7 @@ sub generate {
   #determine if the project has a Core-Periphery Group
   
   my %cpGroupSize;
-  if ( $coreGroup){
+  if ($coreGroup){
     add_progress($report,.04,"Analyzing Core-Periphery Group");
     return if $abort_called;
     Understand::Gui::yield();
@@ -413,6 +412,9 @@ sub generate {
       }elsif($file->{vfi}< $VFIc && $file->{vfo} >= $VFOc){
           $file->{componentCP} = "Control";
           $cpGroupSize{Control}++;
+      }else{
+        $file->{componentCP} = "Secondary";
+        $cpGroupSize{Secondary}++;
       }
     }
     
@@ -910,7 +912,7 @@ sub usefulCommentCount(){
     Understand::Gui::yield();
     
     #Test and see if the comment is for copyright or licensing
-    if ($comment =~ /copyright|license|�/i){
+    if ($comment =~ /copyright|license|©/i){
      #print $commentStartLine.":$comment\n" if $verbose;
      next LEXEME;
     }
@@ -1167,57 +1169,58 @@ sub lexFromLoc{
 sub treemapHTML{
 return << 'ENDTREEMAPHTML'
 <html>
-<head>
+  <head>
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script type="text/javascript">
-        google.charts.load('current', {'packages':['treemap']});
-        google.charts.setOnLoadCallback(drawChart);
-        function drawChart() {
-            var data = google.visualization.arrayToDataTable([
-                    ['Node', 'Parent', 'Useful Lines', 'Threshold Violations', 'Full Name'],
-                    ['Project',null,0,0,'Project'],
-                    ['Peripheral','Project',0,0,'Peripheral'],
-                    ['Shared','Project',0,0,'Shared'],
-                    ['Core','Project',0,0,'Core'],
-                    ['Control','Project',0,0,'Control'],
-                    ['Isolate','Project',0,0,'Isolate'],
-                    ['Central','Project',0,0,'Central'],
-                <<TREEMAPDATA>>;
-        ])
+      google.charts.load('current', {'packages':['treemap']});
+      google.charts.setOnLoadCallback(drawChart);
+      function drawChart() {
+        var data = google.visualization.arrayToDataTable([
+          ['Node', 'Parent', 'Useful Lines', 'Threshold Violations', 'Full Name'],
+          ['Project',null,0,0,'Project'],
+          ['Peripheral','Project',0,0,'Peripheral'],
+          ['Shared','Project',0,0,'Shared'],
+          ['Core','Project',0,0,'Core'],
+          ['Secondary','Project',0,0,'Secondary-Cores'],
+          ['Control','Project',0,0,'Control'],
+          ['Isolate','Project',0,0,'Isolate'],
+          ['Central','Project',0,0,'Central'],
+          <<TREEMAPDATA>>
+        ]);
 
-            tree = new google.visualization.TreeMap(document.getElementById('chart_div'));
+        tree = new google.visualization.TreeMap(document.getElementById('chart_div'));
 
-            tree.draw(data, {
-                minColor: '#9ecae1',
-                maxColor: '#084594',
-                midColor: '#5388BB',
-                headerHeight: 15,
-                fontColor: 'black',
-                showScale: true,
-                useWeightedAverageForAggregation: true,
-                generateTooltip: showFullTooltip,
-                maxDepth: 2
-            });
-
-            function showFullTooltip(row, size, value) {
-                if (data.getValue(row, 1) == "Project" || data.getValue(row, 1) == null){
-                    return '<div style="background:#fd9; padding:10px; border-style:solid">' +
-                        '<span style="font-family:Courier"><b>' + data.getValue(row, 0)+'</span></div>';
-                }
-                return '<div style="background:#fd9; padding:10px; border-style:solid">' +
-                    '<span style="font-family:Courier"><b>' + data.getValue(row, 4) +
-                    '</b>, ' + data.getValue(row, 1) + '</span><br>' +
-                    'Useful Lines of Code: ' + data.getValue(row,2) + '<br>'+
-                    'Threshold Violations: ' + data.getValue(row,3) + '<br></div>';
-            }
-
+        tree.draw(data, {
+          minColor: '#9ecae1',
+          maxColor: '#084594',
+          midColor: '#5388BB',
+          headerHeight: 15,
+          fontColor: 'black',
+          showScale: true,
+          useWeightedAverageForAggregation: true,
+          generateTooltip: showFullTooltip,
+          maxDepth: 2
+        });
+        
+        function showFullTooltip(row, size, value) {
+          if (data.getValue(row, 1) == "Project" || data.getValue(row, 1) == null){
+            return '<div style="background:#fd9; padding:10px; border-style:solid">' +
+           '<span style="font-family:Courier"><b>' + data.getValue(row, 0)+'</span></div>';
+          }
+          return '<div style="background:#fd9; padding:10px; border-style:solid">' +
+           '<span style="font-family:Courier"><b>' + data.getValue(row, 4) +
+           '</b>, ' + data.getValue(row, 1) + '</span><br>' +
+           'Useful Lines of Code: ' + data.getValue(row,2) + '<br>'+
+           'Threshold Violations: ' + data.getValue(row,3) + '<br></div>';
         }
+
+      }
     </script>
-</head>
-<body>
-<div id="chart_div" style="width: 1024px; height: 768px;"></div>
-Left click a node to Zoom In. Right Click to Zoom Out.
-</body>
+  </head>
+  <body>
+    <div id="chart_div" style="width: 1024px; height: 768px;"></div>
+    Left click a node to Zoom In. Right Click to Zoom Out.
+  </body>
 </html>
 ENDTREEMAPHTML
 
@@ -1229,156 +1232,153 @@ sub htmlfile{
 return << 'ENDHTMLDOC'
 <!DOCTYPE html>
 <script>
-    <<EXTERNALDATA>>
+<<EXTERNALDATA>>
 
 
 
-    // **************Everything below this line is template that needs to not have project specific information****************************
+// **************Everything below this line is template that needs to not have project specific information****************************
 </script>
 <style>
 
-    :root {
-        --main-bg-color: #CFE8EF;
-        --dark-bg-color: #C6DBF0;
-        --extra-dark-bg: #AED1E6;
-        --font-color: #3B5863;
-        --border: 1px solid #85C7DE;
-        color: var(--font-color);
-        font-family:arial;
-    }
+:root {
+  --main-bg-color: #CFE8EF;
+  --dark-bg-color: #C6DBF0;
+  --extra-dark-bg: #AED1E6;
+  --font-color: #3B5863;
+  --border: 1px solid #85C7DE;
+  color: var(--font-color);
+  font-family:arial;
+}
 
-    #topbox{
-        height:auto;
-        background-color: var(--main-bg-color);
-        border-radius: 10px;
-        border: var(--border);
-        max-width:960px;
-        margin:0px auto;
+#topbox{
+  height:auto;
+  background-color: var(--main-bg-color);
+  border-radius: 10px;
+  border: var(--border);
+  max-width:960px;
+  margin:0px auto;
 
-    }
+}
 
-    #topbox div{
-        text-align:center;
-    }
+#topbox div{
+  text-align:center;
+}
 
-    #topbox-container {
-        width:100%;
-        position:fixed;
-        top:0px;
-        height:auto;
-        z-index: 100;
-    }
+#topbox-container {
+  width:100%;
+  position:fixed;
+  top:0px;
+  height:auto;
+  z-index: 100;
+}
 
-    input[type=range] {
-        -webkit-appearance: none;
-        width: 200px;
-        background-color: var(--extra-dark-bg);
-    }
+input[type=range] {
+  -webkit-appearance: none;
+  width: 200px;
+  background-color: var(--extra-dark-bg);
+}
 
-    select{
-        background-color: var(--extra-dark-bg);
-    }
+select{
+  background-color: var(--extra-dark-bg);
+}
 
-    select option {
-        background-color: var(--extra-dark-bg);
-    }
+select option {
+  background-color: var(--extra-dark-bg);
+}
+#pageTitle{
+  text-align:center;
+  margin: 5px;
+}
 
-    #pageTitle{
-        text-align:center;
-        margin: 5px;
-    }
+.controller{
+  display: inline-block;
+  text-align: center;
+}
 
-    .controller{
-        display: inline-block;
-        text-align: center;
-    }
-
-    button{
-        background-color: var(--extra-dark-bg);
-        border-radius: 8px;
-    }
-
-    #zoomtag{
-        display: inline-block;
-        width:3em;
-    }
+button{
+  background-color: var(--extra-dark-bg);
+  border-radius: 8px;
+}
+#zoomtag{
+  display: inline-block; 
+  width:3em;
+}
 
 
-    body{
-        position:absolute;
-        overflow:auto;
-    }
+body{
+  position:absolute;
+  overflow:auto;
+}
+.graphContainer {
+  padding: 10px;
+  margin: auto;
+  width:100%;
+  position:relative;
+}
 
-    .graphContainer {
-        padding: 10px;
-        margin: auto;
-        width:100%;
-        position:relative;
-    }
+#myCanvas{
+  padding-left: 0;
+  padding-right: 0;
+  margin-left: auto;
+  margin-right: auto;
+  display: block;
+  z-index: 2;
+}
 
-    #myCanvas{
-        padding-left: 0;
-        padding-right: 0;
-        margin-left: auto;
-        margin-right: auto;
-        display: block;
-        z-index: 2;
-    }
+.metrics{
+  border-radius: 10px;
+  width: 170px;
+  border: var(--border);
+  padding: .5em;
+  padding-top:0em;
+  background-color: var(--main-bg-color);
+  margin: 0 auto;
+  position:fixed;
+  left:0;
+  top:25%;
+  z-index: 90;
+  line-height:110%
+}
 
-    .metrics{
-        border-radius: 10px;
-        width: 170px;
-        border: var(--border);
-        padding: .5em;
-        padding-top:0em;
-        background-color: var(--main-bg-color);
-        margin: 0 auto;
-        position:fixed;
-        left:0;
-        top:25%;
-        z-index: 90;
-        line-height:110%
-    }
+.metricsTitle{
+  padding:2px;
+  margin: 0px;
+  text-align: center;
+}
 
-    .metricsTitle{
-        padding:2px;
-        margin: 0px;
-        text-align: center;
-    }
+.metricName{
+  font-weight:bold;
+  background-color: var(--dark-bg-color);
+  width:100%;
+}
 
-    .metricName{
-        font-weight:bold;
-        background-color: var(--dark-bg-color);
-        width:100%;
-    }
+.metricVal{
+  text-align:right;
+}
 
-    .metricVal{
-        text-align:right;
-    }
+#hoverInfo{
+  height:2.5em;
+}
 
-    #hoverInfo{
-        height:2.5em;
-    }
-
-    #description{
-        max-width:960px;
-        margin: auto;
-        text-align:center;
-        background-color:var(--main-bg-color);
-        border:var(--border);
-        border-radius: 10px;
-        z-index: 80;
-        padding:5px;
-    }
+#description{
+  max-width:960px;
+  margin: auto;
+  text-align:center;
+  background-color:var(--main-bg-color);
+  border:var(--border);
+  border-radius: 10px;
+  z-index: 80;
+  padding:5px;
+}
 
 
-    #description-cont {
-        width:100%;
-        position:fixed;
-        bottom: 0;
-        left: 0;
-        z-index:0;
-    }
+#description-cont {
+  width:100%;
+  position:fixed;
+  bottom: 0;
+  left: 0;
+  z-index:0;
+}
 
 
 
@@ -1386,555 +1386,557 @@ return << 'ENDHTMLDOC'
 <html>
 <body onload="draw()" onresize="draw()">
 <header>
-    <div id="topbox-container">
-        <div id="topbox">
-            <h1 id="pageTitle" style="">Directory Structure Based Design Structure Matrix</h1>
-            <span class=controller style="width:35%"><b>Select Matrix</b>
-                <select id="order" onchange="draw(this.value)">
-                    <option value="Architect" selected>Architect's View</option>
-                    <option value="Median">Median Matrix</option>
-                </select>
-            </span>
-            <span class=controller style="width:14%">
-                <button id=metricsbtn onclick="metricsBtnPress()">Hide Metrics</button></span>
-            <span class=controller style="width:14%">
-                <button id=descbtn onclick="descBtnPress()">Hide Description</button></span>
-            <span class=controller style="width:35%">Zoom:<input name="zoom" type="range" name="points" min="0" max="10"
-                                                                 value="1" oninput="setZoom(this.value)"
-                                                                 onchange="setZoom(this.value)" onmouseup="draw()">
-                <span id="zoomtag">1X</span>
-            </span>
-
-            <div id="hoverInfo"></div>
-        </div>
+  <div id="topbox-container">
+  <div id="topbox">
+      <h1 id="pageTitle" style="">Directory Structure Based Design Structure Matrix</h1>
+      <span class=controller style="width:35%"><b>Select Matrix</b> 
+        <select id="order" onchange="draw(this.value)">
+          <option value="Architect" selected>Architect's View</option>
+          <option value="Median">Median Matrix</option>
+        </select>
+      </span>
+      <span class=controller style="width:14%"><button id=metricsbtn onclick="metricsBtnPress()">Hide Metrics</button></span>
+      <span class=controller style="width:14%"><button id=descbtn onclick="descBtnPress()">Hide Description</button></span>
+      <span class=controller style="width:35%">Zoom:<input name="zoom" type="range" name="points" min="0" max="10"  value="1" oninput="setZoom(this.value)" onchange="setZoom(this.value)" onmouseup="draw()">
+        <span id="zoomtag">1X</span>
+      </span>
+      
+      <div id="hoverInfo"></div>
     </div>
+  </div>
 </header>
 <span class="metrics" id="metricspane"></span>
 
 
-<div class="graphContainer" id="graphContainer">
+    <div class="graphContainer" id="graphContainer">
     <canvas id="myCanvas" ></canvas>
-</div>
+    </div>
 </body>
 
 <footer>
-    <div id ="description-cont">
+  <div id ="description-cont">
         <div  id="description"></div>
 </footer>
 <script charset="utf-8">
 
 
-    // Add the Metrics Section
-    var projName;
-    var isCorePeriphery =false;
-    var MetricsHTML = "<h3 class=\"metricsTitle\">Metrics</h3>";
-    metrics.forEach(function(metricObj){
-        if (metricObj["name"] == "Project Name"){
-            projName = metrics[0].value;
-            return;
-        }
-        //Add the Core-Periphery graph if it exists.
-        if (metricObj["name"] == "Architecture Type" && (metricObj["value"] == "Core-Periphery" || metricObj["value"] == "Borderline Core-Periphery")){
-            var x = document.getElementById("order");
-            var option = document.createElement("option");
-            option.text = "Core-Periphery Matrix";
-            option.value ="Core-Periphery";
-            isCorePeriphery=true;
-            x.add(option);
-        }
-        var value = metricObj["value"];
-        if(!isNaN(value)){
-            value=+value;
-            value = value.toLocaleString();
-        }
-        MetricsHTML += "<div class=\"metricName\">"+metricObj["name"]+"</div> <div class=\"metricVal\"> "+ value +"</div>\n";
+// Add the Metrics Section
+var projName;
+var isCorePeriphery =false;
+var MetricsHTML = "<h3 class=\"metricsTitle\">Metrics</h3>";
+metrics.forEach(function(metricObj){
+  if (metricObj["name"] == "Project Name"){
+    projName = metrics[0].value;
+    return;
+    }
+  //Add the Core-Periphery graph if it exists.
+  if (metricObj["name"] == "Architecture Type" && (metricObj["value"] == "Core-Periphery" || metricObj["value"] == "Borderline Core-Periphery")){
+    var x = document.getElementById("order");
+    var option = document.createElement("option");
+    option.text = "Core-Periphery Matrix";
+    option.value ="Core-Periphery";
+    isCorePeriphery=true;
+    x.add(option);
+  }
+  var value = metricObj["value"];
+  if(!isNaN(value)){
+    value=+value;
+    value = value.toLocaleString();
+  }
+  MetricsHTML += "<div class=\"metricName\">"+metricObj["name"]+"</div> <div class=\"metricVal\"> "+ value +"</div>\n";
+});
+document.getElementById("metricspane").innerHTML =   MetricsHTML;
+
+//Setup ordered node lists for the non-architect views
+var medianNodes =[];
+var coreNodes = [];
+nodes.forEach(function(node){
+  medianNodes[node.medianOrder]=node;
+  if (isCorePeriphery){
+    coreNodes[node.coreOrder]=node;
+  }
+});
+
+// Setup Global information
+var groupOrder = ["Shared","Core","Peripheral","Control","Isolate","Secondary"];
+var nodeColors = {Shared: "#69ad67",Core: "#ea6a66",Peripheral: "#ebebeb",Control: "#ebed62",Isolate: "#eabe62",Secondary: "#ffffff"};
+var medianNames ={Shared:"Shared-M",Core:"Central",Peripheral:"Periphery-M",Control:"Control-M",Isolate: "Isolate"};
+var baseColor = "#1a12f0";
+var backgroundColor = "lightgray";
+var gridColor = 'rgba(255,255,255,.5)';//"white";
+var outlineColor = 'rgba(0,0,0,.5)';//"black";
+var minBorderLineWidth = .5; //Minimum thickness for border lines
+var nodeLineWidth;
+
+
+var CurGraph="Architect";
+var scaleRatio;
+var canvas = document.getElementById("myCanvas");
+var ctx = canvas.getContext("2d");
+
+var zoomLevel=1;
+var initFontSize=12;
+var numFiles=nodes.length;
+var canvasOffset = 0;
+var showMetrics=1;
+var showDescription=1;
+  
+
+  
+function draw(graph){
+  if (typeof graph != 'undefined'){
+    CurGraph=graph;
+  }
+  
+  //Get get Document size info so the image will fit in the current window.
+  var bkgWidth = window.innerWidth || document.body.clientWidth;
+  var bkgHeight = window.innerHeight || document.body.clientHeight;
+  var headerSpace = document.getElementById('topbox-container').offsetHeight;
+  var footerSpace = 0;
+  if (showDescription){
+   footerSpace = 85;
+  }
+  var metricSpace = 0;
+  if (showMetrics){
+    metricSpace =   document.getElementById("metricspane").offsetWidth;
+  }
+  
+  var defaultBkgSize = bkgHeight - headerSpace - footerSpace-50;
+  //if (defaultBkgSize > 1000)
+   // defaultBkgSize = 1000;
+  var bkgSize = defaultBkgSize*zoomLevel;
+  canvas.width=bkgSize;
+  canvas.height=bkgSize;
+  document.getElementById("graphContainer").style.height=bkgSize+"px";
+  document.getElementById("graphContainer").style.top=headerSpace+"px";
+  document.getElementById("graphContainer").style.left=metricSpace+"px";
+  document.getElementById("graphContainer").style.marginBottom=footerSpace+"px";
+  //ctx.clearRect(0, 0, bkgSize, bkgSize); //clear canvas for redraw
+  
+  
+  //get the size of the largest number label to calculate the offset
+  canvasOffset=0;
+  var gridLines = getGridLines();
+  if (numFiles > 10){
+    gridLines.forEach(function(gridNum){
+      ctx.font = (initFontSize*zoomLevel)+"px Arial";
+      var txtSize = ctx.measureText(gridNum.toLocaleString()).width;
+      canvasOffset=Math.max(txtSize,canvasOffset);
     });
-    document.getElementById("metricspane").innerHTML =   MetricsHTML;
+  }
 
-    //Setup ordered node lists for the non-architect views
-    var medianNodes =[];
-    var coreNodes = [];
-    nodes.forEach(function(node){
-        medianNodes[node.medianOrder]=node;
-        if (isCorePeriphery){
-            coreNodes[node.coreOrder]=node;
-        }
+  
+  //prepare the canvas the graph goes on
+  var size = (bkgSize-canvasOffset)
+  scaleRatio = size/numFiles;
+  
+  //calculate line widths
+  var borderLineWidth= minBorderLineWidth;
+  if (scaleRatio > 1){
+    borderLineWidth = minBorderLineWidth*scaleRatio;
+    borderLineWidth = Math.min(borderLineWidth,10)
+  }
+  nodeLineWidth = scaleRatio*.1;
+
+  if (numFiles > 10){
+    //Grid Numbers left side
+    gridLines.forEach(function(gridNum){
+      ctx.textAlign = "right";
+      ctx.font = initFontSize*zoomLevel+"px Arial";
+      ctx.fillStyle = outlineColor;
+      ctx.textBaseline="middle"; 
+      ctx.fillText(gridNum.toLocaleString(),canvasOffset,gridNum*scaleRatio+canvasOffset+scaleRatio/2);
     });
-
-    // Setup Global information
-    var groupOrder = ["Shared","Core","Peripheral","Control","Isolate"];
-    var nodeColors = {Shared: "#69ad67",Core: "#ea6a66",Peripheral: "#ebebeb",Control: "#ebed62",Isolate: "#eabe62"};
-    var medianNames ={Shared:"Shared-M",Core:"Central",Peripheral:"Periphery-M",Control:"Control-M",Isolate: "Isolate"};
-    var baseColor = "#1a12f0";
-    var backgroundColor = "lightgray";
-    var gridColor = 'rgba(255,255,255,.5)';//"white";
-    var outlineColor = 'rgba(0,0,0,.5)';//"black";
-    var minBorderLineWidth = .5; //Minimum thickness for border lines
-    var nodeLineWidth;
-
-
-    var CurGraph="Architect";
-    var scaleRatio;
-    var canvas = document.getElementById("myCanvas");
-    var ctx = canvas.getContext("2d");
-
-    var zoomLevel=1;
-    var initFontSize=12;
-    var numFiles=nodes.length;
-    var canvasOffset = 0;
-    var showMetrics=1;
-    var showDescription=1;
-
-
-
-    function draw(graph){
-        if (typeof graph != 'undefined'){
-            CurGraph=graph;
+    
+      //Grid Numbers top
+      ctx.save();
+      ctx.translate(canvasOffset,canvasOffset);
+      ctx.rotate(-Math.PI/2);
+      gridLines.forEach(function(gridNum){
+        if (gridNum>0){ //We don't want the zero on both axes
+          ctx.textAlign = "left";
+          ctx.font = (initFontSize*zoomLevel)+"px Arial";
+          ctx.fillStyle = outlineColor;
+          ctx.textBaseline="middle"; 
+          ctx.fillText(gridNum.toLocaleString(),0,gridNum*scaleRatio+scaleRatio/2);
         }
+      });
+      ctx.restore();
+    
+    //Move into the inner part of the canvas now for everything else
+    ctx.save();
+    ctx.translate(canvasOffset,canvasOffset);
+  }
+  
+  ctx.fillStyle = backgroundColor;
+  ctx.fillRect(0,0,size,size)
 
-        //Get get Document size info so the image will fit in the current window.
-        var bkgWidth = window.innerWidth || document.body.clientWidth;
-        var bkgHeight = window.innerHeight || document.body.clientHeight;
-        var headerSpace = document.getElementById('topbox-container').offsetHeight;
-        var footerSpace = 0;
-        if (showDescription){
-            footerSpace = 85;
-        }
-        var metricSpace = 0;
-        if (showMetrics){
-            metricSpace =   document.getElementById("metricspane").offsetWidth;
-        }
-
-        var defaultBkgSize = bkgHeight - headerSpace - footerSpace-50;
-        //if (defaultBkgSize > 1000)
-        // defaultBkgSize = 1000;
-        var bkgSize = defaultBkgSize*zoomLevel;
-        canvas.width=bkgSize;
-        canvas.height=bkgSize;
-        document.getElementById("graphContainer").style.height=bkgSize+"px";
-        document.getElementById("graphContainer").style.top=headerSpace+"px";
-        document.getElementById("graphContainer").style.left=metricSpace+"px";
-        document.getElementById("graphContainer").style.marginBottom=footerSpace+"px";
-        //ctx.clearRect(0, 0, bkgSize, bkgSize); //clear canvas for redraw
-
-
-        //get the size of the largest number label to calculate the offset
-        canvasOffset=0;
-        var gridLines = getGridLines();
-        if (numFiles > 10){
-            gridLines.forEach(function(gridNum){
-                ctx.font = (initFontSize*zoomLevel)+"px Arial";
-                var txtSize = ctx.measureText(gridNum.toLocaleString()).width;
-                canvasOffset=Math.max(txtSize,canvasOffset);
-            });
-        }
-
-
-        //prepare the canvas the graph goes on
-        var size = (bkgSize-canvasOffset);
-        scaleRatio = size/numFiles;
-
-        //calculate line widths
-        var borderLineWidth= minBorderLineWidth;
-        if (scaleRatio > 1){
-            borderLineWidth = minBorderLineWidth*scaleRatio;
-            borderLineWidth = Math.min(borderLineWidth,10)
-        }
-        nodeLineWidth = scaleRatio*.1;
-
-        if (numFiles > 10){
-            //Grid Numbers left side
-            gridLines.forEach(function(gridNum){
-                ctx.textAlign = "right";
-                ctx.font = initFontSize*zoomLevel+"px Arial";
-                ctx.fillStyle = outlineColor;
-                ctx.textBaseline="middle";
-                ctx.fillText(gridNum.toLocaleString(),canvasOffset,gridNum*scaleRatio+canvasOffset+scaleRatio/2);
-            });
-
-            //Grid Numbers top
-            ctx.save();
-            ctx.translate(canvasOffset,canvasOffset);
-            ctx.rotate(-Math.PI/2);
-            gridLines.forEach(function(gridNum){
-                if (gridNum>0){ //We don't want the zero on both axes
-                    ctx.textAlign = "left";
-                    ctx.font = (initFontSize*zoomLevel)+"px Arial";
-                    ctx.fillStyle = outlineColor;
-                    ctx.textBaseline="middle";
-                    ctx.fillText(gridNum.toLocaleString(),0,gridNum*scaleRatio+scaleRatio/2);
-                }
-            });
-            ctx.restore();
-
-            //Move into the inner part of the canvas now for everything else
-            ctx.save();
-            ctx.translate(canvasOffset,canvasOffset);
-        }
-
-        ctx.fillStyle = backgroundColor;
-        ctx.fillRect(0,0,size,size);
-
-
-        if (CurGraph == "Core-Periphery"){
-            //Core-Periphery background
-            var currentXY=0;
-            groupOrder.forEach(function(group){
-                if (cpGroupSize[group]){
-                    ctx.strokeStyle = nodeColors[group];
-                    ctx.fillStyle = nodeColors[group];
-                    ctx.lineWidth=borderLineWidth;
-                    roundRect(ctx,currentXY*scaleRatio,currentXY*scaleRatio,cpGroupSize[group]*scaleRatio,cpGroupSize[group]*scaleRatio,0,true);
-                    currentXY=currentXY+Number(cpGroupSize[group]);
-                }
-            });
-            //Core-Periphery node
-            links.forEach(function(link) {
-                ctx.strokeStyle = getNodeColor(nodes[link.target],nodes[link.source],"core");
-                ctx.fillStyle = baseColor;
-                ctx.lineWidth=nodeLineWidth;
-                roundRect(ctx,nodes[link.target].coreOrder*scaleRatio,nodes[link.source].coreOrder*scaleRatio,scaleRatio,scaleRatio,.1,true);
-            });
-
-            //Core-Periphery border
-            var currentXY=0;
-            groupOrder.forEach(function(group){
-                if (cpGroupSize[group]){
-                    ctx.strokeStyle = outlineColor;
-                    ctx.lineWidth=borderLineWidth;
-                    roundRect(ctx,currentXY*scaleRatio,currentXY*scaleRatio,cpGroupSize[group]*scaleRatio,cpGroupSize[group]*scaleRatio,0,false);
-                    currentXY=currentXY+Number(cpGroupSize[group]);
-                }
-            });
-
-            //Core-Periphery explanatory text
-            document.title=projName+" Core-Periphery Based DSM";
-            document.getElementById("pageTitle").innerHTML = projName+" Core-Periphery Based Design Structure Matrix";
-            document.getElementById("description").innerHTML =
-                "This project contains a Core group of files in red that much of the system is connected with. The other components are organized based on their relationship with the Core group. "+
-                "Each point in the matrix represents a directional dependency relationship between two files. Dependencies above the diagonal are cyclic interdependencies which cannot be reduced."+" (v"+version+")";
-        }
-        else if (CurGraph == "Median"){
-            //Median Background
-            var currentXY=0;
-            groupOrder.forEach(function(group){
-                if (mGroupSize[group]){
-                    ctx.strokeStyle = nodeColors[group];
-                    ctx.fillStyle = nodeColors[group];
-                    ctx.lineWidth=borderLineWidth;
-                    roundRect(ctx,currentXY*scaleRatio,currentXY*scaleRatio,mGroupSize[group]*scaleRatio,mGroupSize[group]*scaleRatio,.0,true);
-                    currentXY=currentXY+Number(mGroupSize[group]);
-                }
-            });
-
-            //Median nodes
-            links.forEach(function(link) {
-                ctx.fillStyle = baseColor;
-                ctx.strokeStyle = getNodeColor(nodes[link.target],nodes[link.source],"median");
-                ctx.lineWidth=nodeLineWidth;
-                roundRect(ctx,nodes[link.target].medianOrder*scaleRatio,nodes[link.source].medianOrder*scaleRatio,scaleRatio,scaleRatio,.1,true,true);
-            });
-
-            //Median border
-            ctx.lineWidth=borderLineWidth;
-            var currentXY=0;
-
-            groupOrder.forEach(function(group){
-                if (mGroupSize[group]){
-                    ctx.strokeStyle = outlineColor;
-                    ctx.lineWidth=borderLineWidth;
-                    roundRect(ctx,currentXY*scaleRatio,currentXY*scaleRatio,mGroupSize[group]*scaleRatio,mGroupSize[group]*scaleRatio,0,false);
-                    currentXY=currentXY+Number(mGroupSize[group]);
-                }
-            });
-
-            //Median explanatory text
-            document.title=projName+" Median Based DSM";
-            document.getElementById("pageTitle").innerHTML = projName+" Median Based Design Structure Matrix";
-            document.getElementById("description").innerHTML =
-                "This view places all of the significant cyclic groups together in the red Central component. Components are classified based on the median values of the number of direct and indirect connections. "+
-                "Each point in the matrix represents a directional dependency relationship between two files. Dependencies above the diagonal are cyclic interdependencies which cannot be reduced"+" (v"+version+")";
-
-        }
-        else{ //Architect View
-            //Architect View nodes
-
-            links.forEach(function(link) {
-                ctx.fillStyle = baseColor;
-                ctx.strokeStyle = backgroundColor;
-                ctx.lineWidth=nodeLineWidth;
-                roundRect(ctx,link.target*scaleRatio,link.source*scaleRatio,scaleRatio,scaleRatio,.1,true,true);
-            });
-            //Architect View Border
-            if (Object.keys(directories).length >1){
-                directories.forEach(function(dir){
-                    ctx.strokeStyle = outlineColor;
-                    ctx.lineWidth=borderLineWidth;
-                    roundRect(ctx,dir.first*scaleRatio,dir.first*scaleRatio,dir.size*scaleRatio,dir.size*scaleRatio,0,false);
-                });
-            }
-
-            //Architect View explanatory text
-            document.title=projName+" Architect's View DSM";
-            document.getElementById("pageTitle").innerHTML = projName+" Architect's View Design Structure Matrix";
-            document.getElementById("description").innerHTML =
-                "This is the initial design view. Files are shown organized according to their directory structure, or how the System Architect designed it. "+
-                "If file i depends on file j, a mark is placed in the row of i and the column of j"+" (v"+version+")";
-        }
-
-        if(numFiles > 10){
-            //Generate the grid lines
-            gridLines.forEach(function(gridNum){
-                if (gridNum >0){
-                    ctx.strokeStyle = gridColor;
-                    ctx.lineWidth=borderLineWidth;
-                    ctx.beginPath();
-                    ctx.moveTo(0,gridNum*scaleRatio);
-                    ctx.lineTo(size,gridNum*scaleRatio);
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.moveTo(gridNum*scaleRatio,0);
-                    ctx.lineTo(gridNum*scaleRatio,size);
-                    ctx.stroke();
-                }
-            });
-        }
-
-        //Draw an orgin line
+  
+    if (CurGraph == "Core-Periphery"){
+    //Core-Periphery background
+    var currentXY=0;
+    groupOrder.forEach(function(group){
+      if (cpGroupSize[group]){
+        ctx.strokeStyle = nodeColors[group];
+        ctx.fillStyle = nodeColors[group];
+        ctx.lineWidth=borderLineWidth;
+        roundRect(ctx,currentXY*scaleRatio,currentXY*scaleRatio,cpGroupSize[group]*scaleRatio,cpGroupSize[group]*scaleRatio,0,true);
+        currentXY=currentXY+Number(cpGroupSize[group]);
+      }
+    });
+    //Core-Periphery node
+    links.forEach(function(link) {
+      ctx.strokeStyle = getNodeColor(nodes[link.target],nodes[link.source],"core");
+      ctx.fillStyle = baseColor;
+      ctx.lineWidth=nodeLineWidth;
+      roundRect(ctx,nodes[link.target].coreOrder*scaleRatio,nodes[link.source].coreOrder*scaleRatio,scaleRatio,scaleRatio,.1,true);
+    });
+    
+    //Core-Periphery border
+    var currentXY=0;
+    groupOrder.forEach(function(group){
+      if (cpGroupSize[group]){
         ctx.strokeStyle = outlineColor;
-        ctx.lineWidth= borderLineWidth;
+        ctx.lineWidth=borderLineWidth;
+        roundRect(ctx,currentXY*scaleRatio,currentXY*scaleRatio,cpGroupSize[group]*scaleRatio,cpGroupSize[group]*scaleRatio,0,false);
+        currentXY=currentXY+Number(cpGroupSize[group]);
+      }
+    });
+    
+    //Core-Periphery explanatory text
+    document.title=projName+" Core-Periphery Based DSM";
+    document.getElementById("pageTitle").innerHTML = projName+" Core-Periphery Based Design Structure Matrix";
+    document.getElementById("description").innerHTML = 
+    "This project contains a Core group of files in red that much of the system is connected with. The other components are organized based on their relationship with the Core group. "+
+    "Each point in the matrix represents a directional dependency relationship between two files. Dependencies above the diagonal are cyclic interdependencies which cannot be reduced."+" (v"+version+")";  
+  }
+  else if (CurGraph == "Median"){
+    //Median Background
+    var currentXY=0;
+    groupOrder.forEach(function(group){
+      if (mGroupSize[group]){
+        ctx.strokeStyle = nodeColors[group];
+        ctx.fillStyle = nodeColors[group];
+        ctx.lineWidth=borderLineWidth;
+        roundRect(ctx,currentXY*scaleRatio,currentXY*scaleRatio,mGroupSize[group]*scaleRatio,mGroupSize[group]*scaleRatio,.0,true);
+        currentXY=currentXY+Number(mGroupSize[group]);
+      }
+    });
+    
+    //Median nodes
+    links.forEach(function(link) {
+      ctx.fillStyle = baseColor;
+      ctx.strokeStyle = getNodeColor(nodes[link.target],nodes[link.source],"median");
+      ctx.lineWidth=nodeLineWidth;
+      roundRect(ctx,nodes[link.target].medianOrder*scaleRatio,nodes[link.source].medianOrder*scaleRatio,scaleRatio,scaleRatio,.1,true,true);
+    });
+    
+    //Median border
+    ctx.lineWidth=borderLineWidth;
+    var currentXY=0;
+    
+    groupOrder.forEach(function(group){
+      if (mGroupSize[group]){
+        ctx.strokeStyle = outlineColor;
+        ctx.lineWidth=borderLineWidth;
+        roundRect(ctx,currentXY*scaleRatio,currentXY*scaleRatio,mGroupSize[group]*scaleRatio,mGroupSize[group]*scaleRatio,0,false);
+        currentXY=currentXY+Number(mGroupSize[group]);
+      }
+    });
+   
+    //Median explanatory text
+    document.title=projName+" Median Based DSM";
+    document.getElementById("pageTitle").innerHTML = projName+" Median Based Design Structure Matrix";
+    document.getElementById("description").innerHTML = 
+    "This view places all of the significant cyclic groups together in the red Central component. Components are classified based on the median values of the number of direct and indirect connections. "+
+    "Each point in the matrix represents a directional dependency relationship between two files. Dependencies above the diagonal are cyclic interdependencies which cannot be reduced"+" (v"+version+")";
+
+  }
+  else{ //Architect View
+    //Architect View nodes
+    
+    links.forEach(function(link) {
+        ctx.fillStyle = baseColor;
+        ctx.strokeStyle = backgroundColor;
+        ctx.lineWidth=nodeLineWidth;
+        roundRect(ctx,link.target*scaleRatio,link.source*scaleRatio,scaleRatio,scaleRatio,.1,true,true);
+      });
+    //Architect View Border
+    if (Object.keys(directories).length >1){
+      directories.forEach(function(dir){
+        ctx.strokeStyle = outlineColor;
+        ctx.lineWidth=borderLineWidth;
+        roundRect(ctx,dir.first*scaleRatio,dir.first*scaleRatio,dir.size*scaleRatio,dir.size*scaleRatio,0,false);
+      });
+    }
+    
+    //Architect View explanatory text
+    document.title=projName+" Architect's View DSM";
+    document.getElementById("pageTitle").innerHTML = projName+" Architect's View Design Structure Matrix";
+    document.getElementById("description").innerHTML = 
+    "This is the initial design view. Files are shown organized according to their directory structure, or how the System Architect designed it. "+
+    "If file i depends on file j, a mark is placed in the row of i and the column of j"+" (v"+version+")";
+  }
+  
+  if(numFiles > 10){
+    //Generate the grid lines
+  gridLines.forEach(function(gridNum){
+      if (gridNum >0){
+        ctx.strokeStyle = gridColor;
+        ctx.lineWidth=borderLineWidth;
         ctx.beginPath();
-        ctx.moveTo(0,0);
-        ctx.lineTo(size,size);
+        ctx.moveTo(0,gridNum*scaleRatio)
+        ctx.lineTo(size,gridNum*scaleRatio);
         ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(gridNum*scaleRatio,0)
+        ctx.lineTo(gridNum*scaleRatio,size);
+        ctx.stroke();
+      }
+    });
+  }
+    
+  //Draw an orgin line
+  ctx.strokeStyle = outlineColor;
+  ctx.lineWidth= borderLineWidth;
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.lineTo(size,size);
+  ctx.stroke();
+  
+ 
+}
 
 
+function metricsBtnPress(){
+  if (showMetrics ==1){
+    showMetrics = 0;
+    document.getElementById("metricspane").style.display= "none";
+    document.getElementById("metricsbtn").innerHTML= "Show Metrics";
+    draw();
+  }else{
+    showMetrics = 1;
+    document.getElementById("metricspane").style.display= "block";
+    document.getElementById("metricsbtn").innerHTML= "Hide Metrics";
+    draw();
+  }
+}
+
+function descBtnPress(){
+  if (showDescription ==1){
+    showDescription = 0;
+    document.getElementById("description-cont").style.display= "none";
+    document.getElementById("descbtn").innerHTML= "Show Description";
+    draw();
+  }else{
+    showDescription = 1;
+    document.getElementById("description-cont").style.display= "block";
+    document.getElementById("descbtn").innerHTML= "Hide Description";
+    draw();
+  }
+}
+
+function getGridLines(){
+  if (numFiles <= 10){return;}
+  var numString = numFiles.toString();
+  var strLength = numString.length-1;
+  var retNumbers = [];
+  var first = parseInt(numString[0]);
+ 
+  for (i = 0;i<= first;i++){
+      var tmpNum = (i*Math.pow(10,strLength));
+      retNumbers.push(tmpNum);
+     
+    if (first <= 5){ 
+      var tmpNum = (i*10+5) *Math.pow(10,strLength-1)
+      if (tmpNum < numFiles){
+        retNumbers.push(tmpNum);
+      }
     }
+  }
+  return retNumbers;
+}
 
-
-    function metricsBtnPress(){
-        if (showMetrics ==1){
-            showMetrics = 0;
-            document.getElementById("metricspane").style.display= "none";
-            document.getElementById("metricsbtn").innerHTML= "Show Metrics";
-            draw();
-        }else{
-            showMetrics = 1;
-            document.getElementById("metricspane").style.display= "block";
-            document.getElementById("metricsbtn").innerHTML= "Hide Metrics";
-            draw();
-        }
+canvas.addEventListener('mousemove', handleMouseMove, false);
+function handleMouseMove(evt){
+    var rect = canvas.getBoundingClientRect();
+    var absX = evt.clientX - rect.left;
+    var absY = evt.clientY - rect.top;
+    var mouseX= Math.floor((absX-canvasOffset) / scaleRatio);//  Math.floor((evt.clientX-rect.left-canvasOffset)/(rect.right-rect.left-canvasOffset)*canvas.width/scaleRatio);
+    var mouseY= Math.floor((absY-canvasOffset) / scaleRatio);//Math.floor((evt.clientY-rect.top-canvasOffset)/(rect.bottom-rect.top-canvasOffset)*canvas.height/scaleRatio);
+    var message="";
+    var title = "";
+    var currentXY=0;
+    var size;
+    var selectedGroup;
+  
+  
+  if (CurGraph == "Core-Periphery"){
+    groupOrder.forEach(function(group){
+      var groupSize = Number(cpGroupSize[group]);
+      if (!groupSize){
+        return;
+      }
+      if (mouseX>=currentXY && mouseX<=currentXY+groupSize && mouseY>=currentXY && mouseY<=currentXY+groupSize){
+        selectedGroup=group;
+        size=groupSize;
+      }
+      switch(selectedGroup){
+        case("Shared"):
+          message="<span style=\"color:"+baseColor+"\">Shared components("+size+" Files)  These files are used by many other components, both in and out of the Core.</span>";
+          title= "Shared components("+size+" Files)";
+          break;
+        case("Core"):
+          message="<span style=\"color:"+baseColor+"\">Core components("+size+" Files)  Core components. A substantial part of the system is linked to these files.</span>";
+          title= "Core components("+size+" Files)";
+          break;
+        case("Peripheral"):
+          message="<span style=\"color:"+baseColor+"\">Peripheral components("+size+" Files)  These files do not interact with the Core</span>";
+          title= "Peripheral components("+size+" Files)";
+          break;
+        case("Secondary"):
+          message="<span style=\"color:"+baseColor+"\">Secondary-Core components("+size+" Files)  These files are secondary cyclic groups in the program that many other components interact with</span>";
+          title= "Secondary-Core components("+size+" Files)";
+          break;
+        case("Control"):
+          message="<span style=\"color:"+baseColor+"\">Control components("+size+" Files)  These files make use of other components but are not used by other components</span>";
+          title= "Control components("+size+" Files)";
+          break;
+        case("Isolate"):
+          message="<span style=\"color:"+baseColor+"\">Isolated components("+size+" Files)  These files are not connected to any other components.</span>";
+          title= "Isolated components("+size+" Files)";
+          break;
+      }
+      currentXY=currentXY+groupSize;
+    });
+    message =message+"<br>"+coreNodes[mouseY].name+" &rarr;  "+coreNodes[mouseX].name;
+  }
+  else if (CurGraph == "Median"){
+    groupOrder.forEach(function(group){
+      var groupSize = Number(mGroupSize[group]);
+      if (!groupSize){
+        return;
+      }
+      if (mouseX>=currentXY && mouseX<=currentXY+groupSize && mouseY>=currentXY && mouseY<=currentXY+groupSize){
+        selectedGroup=medianNames[group];
+        size=groupSize;
+      }
+     switch(selectedGroup){
+      case("Shared-M"):
+        message="<span style=\"color:"+baseColor+"\">Shared-M components("+size+" Files) These files are used by many other components, including the Central Components</span>";
+        title= "Shared-M components("+size+" Files)";
+        break;
+      case("Central"):
+        message="<span style=\"color:"+baseColor+"\">Central components("+size+" Files)  These files are the main cyclic groups in the program that many other components interact with</span>";
+        title= "Central components("+size+" Files)";
+        break;
+      case("Periphery-M"):
+        message="<span style=\"color:"+baseColor+"\">Periphery-M components("+size+" Files)  These files do not interact with the Central components</span>";
+        title= "Periphery-M components("+size+" Files)";
+        break;
+      case("Control-M"):
+        message="<span style=\"color:"+baseColor+"\">Control-M components("+size+" Files)  These make use of other components but are not used by other components</span>";
+        title= "Control-M components("+size+" Files)";
+        break;
+      case("Isolate"):
+        message="<span style=\"color:"+baseColor+"\">Isolated components("+size+" Files)  These files are not connected to any other components.</span>";
+        title= "Isolated components("+size+" Files)";
+        break;
     }
+    
+      currentXY=currentXY+groupSize;
+    });
+    message =message+"<br>"+medianNodes[mouseY].name+" &rarr;  "+medianNodes[mouseX].name;
+  }
+  else{ //Architect View
+    directories.forEach(function(dir){
+      if (mouseX>=currentXY && mouseX<=currentXY+dir.size && mouseY>=currentXY && mouseY<=currentXY+dir.size){
+        message="<span style=\"color:"+baseColor+"\">Directory: '"+dir.dirName+" ("+dir.size+" Files)</span>";
+        title = dir.dirName+" ("+dir.size+" Files)";
+      }
+      currentXY=currentXY+dir.size;
+    });
+    message =message+"<br>"+nodes[mouseY].name+" &rarr;  "+nodes[mouseX].name;
+  
+  }
+  
+  canvas.title=title;
+  document.getElementById("hoverInfo").innerHTML = message;
+}
 
-    function descBtnPress(){
-        if (showDescription ==1){
-            showDescription = 0;
-            document.getElementById("description-cont").style.display= "none";
-            document.getElementById("descbtn").innerHTML= "Show Description";
-            draw();
-        }else{
-            showDescription = 1;
-            document.getElementById("description-cont").style.display= "block";
-            document.getElementById("descbtn").innerHTML= "Hide Description";
-            draw();
-        }
+function setZoom(newZoom){
+  if (newZoom == 0){
+    newZoom = "1/2";
+    zoomLevel=.5;
+  }else{
+    zoomLevel=newZoom;
+  }
+  document.getElementById("zoomtag").innerHTML = newZoom+"X";
+  //draw();
+}
+/**
+ * Draws a rounded rectangle using the current state of the canvas.
+ * If you omit the last three params, it will draw a rectangle
+ * outline with a 5 pixel border radius
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Number} x The top left x coordinate
+ * @param {Number} y The top left y coordinate
+ * @param {Number} width The width of the rectangle
+ * @param {Number} height The height of the rectangle
+ * @param {Number} radius What percent of the rectangle should curve (in decimal)
+ * @param {Boolean} [fill = false] Whether to fill the rectangle.
+ * @param {Boolean} [stroke = true] Whether to stroke the rectangle.
+ */
+function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+  if (typeof stroke == 'undefined') {
+    stroke = true;
+  }
+  if (typeof radius === 'undefined') {
+    radius = .1;
+  }
+  if (width < .1 || height < .1){
+    ctx.fillRect(x,y,width,height);
+  }else{
+    radius = radius * width;
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    if (fill) {
+      ctx.fill();
     }
-
-    function getGridLines(){
-        if (numFiles <= 10){return;}
-        var numString = numFiles.toString();
-        var strLength = numString.length-1;
-        var retNumbers = [];
-        var first = parseInt(numString[0]);
-
-        for (i = 0;i<= first;i++){
-            var tmpNum = (i*Math.pow(10,strLength));
-            retNumbers.push(tmpNum);
-
-            if (first <= 5){
-                var tmpNum = (i*10+5) *Math.pow(10,strLength-1);
-                if (tmpNum < numFiles){
-                    retNumbers.push(tmpNum);
-                }
-            }
-        }
-        return retNumbers;
+    if (stroke) {
+      ctx.stroke();
     }
+  }
 
-    canvas.addEventListener('mousemove', handleMouseMove, false);
-    function handleMouseMove(evt){
-        var rect = canvas.getBoundingClientRect();
-        var absX = evt.clientX - rect.left;
-        var absY = evt.clientY - rect.top;
-        var mouseX= Math.floor((absX-canvasOffset) / scaleRatio);//  Math.floor((evt.clientX-rect.left-canvasOffset)/(rect.right-rect.left-canvasOffset)*canvas.width/scaleRatio);
-        var mouseY= Math.floor((absY-canvasOffset) / scaleRatio);//Math.floor((evt.clientY-rect.top-canvasOffset)/(rect.bottom-rect.top-canvasOffset)*canvas.height/scaleRatio);
-        var message="";
-        var title = "";
-        var currentXY=0;
-        var size;
-        var selectedGroup;
+}
 
-
-        if (CurGraph == "Core-Periphery"){
-            groupOrder.forEach(function(group){
-                var groupSize = Number(cpGroupSize[group]);
-                if (!groupSize){
-                    return;
-                }
-                if (mouseX>=currentXY && mouseX<=currentXY+groupSize && mouseY>=currentXY && mouseY<=currentXY+groupSize){
-                    selectedGroup=group;
-                    size=groupSize;
-                }
-                switch(selectedGroup){
-                    case("Shared"):
-                        message="<span style=\"color:"+baseColor+"\">Shared components("+size+" Files)  These files are used by many other components, both in and out of the Core.</span>";
-                        title= "Shared components("+size+" Files)";
-                        break;
-                    case("Core"):
-                        message="<span style=\"color:"+baseColor+"\">Core components("+size+" Files)  Core components. A substantial part of the system is linked to these files.</span>";
-                        title= "Core components("+size+" Files)";
-                        break;
-                    case("Peripheral"):
-                        message="<span style=\"color:"+baseColor+"\">Peripheral components("+size+" Files)  These files do not interact with the Core</span>";
-                        title= "Peripheral components("+size+" Files)";
-                        break;
-                    case("Control"):
-                        message="<span style=\"color:"+baseColor+"\">Control components("+size+" Files)  These files make use of other components but are not used by other components</span>";
-                        title= "Control components("+size+" Files)";
-                        break;
-                    case("Isolate"):
-                        message="<span style=\"color:"+baseColor+"\">Isolated components("+size+" Files)  These files are not connected to any other components.</span>";
-                        title= "Isolated components("+size+" Files)";
-                        break;
-                }
-                currentXY=currentXY+groupSize;
-            });
-            message =message+"<br>"+coreNodes[mouseY].name+" &rarr;  "+coreNodes[mouseX].name;
-        }
-        else if (CurGraph == "Median"){
-            groupOrder.forEach(function(group){
-                var groupSize = Number(mGroupSize[group]);
-                if (!groupSize){
-                    return;
-                }
-                if (mouseX>=currentXY && mouseX<=currentXY+groupSize && mouseY>=currentXY && mouseY<=currentXY+groupSize){
-                    selectedGroup=medianNames[group];
-                    size=groupSize;
-                }
-                switch(selectedGroup){
-                    case("Shared-M"):
-                        message="<span style=\"color:"+baseColor+"\">Shared-M components("+size+" Files) These files are used by many other components, including the Central Components</span>";
-                        title= "Shared-M components("+size+" Files)";
-                        break;
-                    case("Central"):
-                        message="<span style=\"color:"+baseColor+"\">Central components("+size+" Files)  These files are the main cyclic groups in the program that many other components interact with</span>";
-                        title= "Central components("+size+" Files)";
-                        break;
-                    case("Periphery-M"):
-                        message="<span style=\"color:"+baseColor+"\">Periphery-M components("+size+" Files)  These files do not interact with the Central components</span>";
-                        title= "Periphery-M components("+size+" Files)";
-                        break;
-                    case("Control-M"):
-                        message="<span style=\"color:"+baseColor+"\">Control-M components("+size+" Files)  These make use of other components but are not used by other components</span>";
-                        title= "Control-M components("+size+" Files)";
-                        break;
-                    case("Isolate"):
-                        message="<span style=\"color:"+baseColor+"\">Isolated components("+size+" Files)  These files are not connected to any other components.</span>";
-                        title= "Isolated components("+size+" Files)";
-                        break;
-                }
-
-                currentXY=currentXY+groupSize;
-            });
-            message =message+"<br>"+medianNodes[mouseY].name+" &rarr;  "+medianNodes[mouseX].name;
-        }
-        else{ //Architect View
-            directories.forEach(function(dir){
-                if (mouseX>=currentXY && mouseX<=currentXY+dir.size && mouseY>=currentXY && mouseY<=currentXY+dir.size){
-                    message="<span style=\"color:"+baseColor+"\">Directory: '"+dir.dirName+" ("+dir.size+" Files)</span>";
-                    title = dir.dirName+" ("+dir.size+" Files)";
-                }
-                currentXY=currentXY+dir.size;
-            });
-            message =message+"<br>"+nodes[mouseY].name+" &rarr;  "+nodes[mouseX].name;
-
-        }
-
-        canvas.title=title;
-        document.getElementById("hoverInfo").innerHTML = message;
+ function getNodeColor(node1,node2,type){
+    var comp1,comp2;
+    var color =  backgroundColor;
+    if (type == "core"){
+      comp1 = node1.componentCP;
+      comp2 = node2.componentCP;
+    }else{
+      comp1 = node1.componentM;
+      comp2 = node2.componentM;
     }
-
-    function setZoom(newZoom){
-        if (newZoom == 0){
-            newZoom = "1/2";
-            zoomLevel=.5;
-        }else{
-            zoomLevel=newZoom;
-        }
-        document.getElementById("zoomtag").innerHTML = newZoom+"X";
-        //draw();
+    if (comp1 == comp2){
+      color = nodeColors[comp1];
     }
-    /**
-     * Draws a rounded rectangle using the current state of the canvas.
-     * If you omit the last three params, it will draw a rectangle
-     * outline with a 5 pixel border radius
-     * @param {CanvasRenderingContext2D} ctx
-     * @param {Number} x The top left x coordinate
-     * @param {Number} y The top left y coordinate
-     * @param {Number} width The width of the rectangle
-     * @param {Number} height The height of the rectangle
-     * @param {Number} radius What percent of the rectangle should curve (in decimal)
-     * @param {Boolean} [fill = false] Whether to fill the rectangle.
-     * @param {Boolean} [stroke = true] Whether to stroke the rectangle.
-     */
-    function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
-        if (typeof stroke == 'undefined') {
-            stroke = true;
-        }
-        if (typeof radius === 'undefined') {
-            radius = .1;
-        }
-        if (width < .1 || height < .1){
-            ctx.fillRect(x,y,width,height);
-        }else{
-            radius = radius * width;
-            ctx.beginPath();
-            ctx.moveTo(x + radius, y);
-            ctx.lineTo(x + width - radius, y);
-            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-            ctx.lineTo(x + width, y + height - radius);
-            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-            ctx.lineTo(x + radius, y + height);
-            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-            ctx.lineTo(x, y + radius);
-            ctx.quadraticCurveTo(x, y, x + radius, y);
-            ctx.closePath();
-            if (fill) {
-                ctx.fill();
-            }
-            if (stroke) {
-                ctx.stroke();
-            }
-        }
-
-    }
-
-    function getNodeColor(node1,node2,type){
-        var comp1,comp2;
-        var color =  backgroundColor;
-        if (type == "core"){
-            comp1 = node1.componentCP;
-            comp2 = node2.componentCP;
-        }else{
-            comp1 = node1.componentM;
-            comp2 = node2.componentM;
-        }
-        if (comp1 == comp2){
-            color = nodeColors[comp1];
-        }
-        return color;
-    }
+    return color;
+  }
 </script>
+
+
 
 
 ENDHTMLDOC
@@ -2047,6 +2049,8 @@ sub sortByCorePeriphery{
     if ($b->{componentCP} eq "Core"){return 1}
     if ($a->{componentCP} eq "Peripheral"){return -1}
     if ($b->{componentCP} eq "Peripheral"){return 1}
+    if ($a->{componentCP} eq "Secondary"){return -1}
+    if ($b->{componentCP} eq "Secondary"){return 1}
     if ($a->{componentCP} eq "Control"){return -1}
     if ($b->{componentCP} eq "Control"){return 1}
     #Should not get here since both would have to be  "isolate"
@@ -2139,193 +2143,6 @@ sub strongconnect(){
     return @deps;
 }
 
-
-#********************* Conversion Functions *********************
-
-sub openDatabase($){
-    my ($dbPath) = @_;
-
-    my $db = Understand::Gui::db();
-
-    # path not allowed if opened by understand
-    if ($db&&$dbPath) {
-  die "database already opened by GUI, don't use -db option\n";
-    }
-
-    # open database if not already open
-    if (!$db) {
-  my $status;
-  print usage("Error, database not specified\n\n") && exit() unless ($dbPath);
-  ($db,$status)=Understand::open($dbPath);
-  die "Error opening database: ",$status,"\n" if $status;
-    }
-    return($db);
-}
-
-sub closeDatabase($){
-    my ($db)=@_;
-
-    # close database only if we opened it
-    $db->close() if $dbPath;
-}
-
-sub usage($) {
-    my $string =  shift(@_) . <<"END_USAGE";
-Usage: $0 -db database
-  -db database  Specify Understand database (required for uperl, inherited from Understand)
-END_USAGE
-  foreach my $opt (keys %{$report->option()} ){
-    next if $opt eq "db";
-    $string .= "  -$opt";
-    $string .= " ".$report->option->{$opt}{kind} if $report->option->{$opt}{kind} ne "boolean";
-    $string .= "    ".$report->option->{$opt}{desc}."\n";
-    my $choices = $report->option->{$opt}{choices};
-    $string .= "        Valid Options: ".join(',',@$choices)." \n" if $choices;
-    $string .= "        Defaults To : ".$report->option->{$opt}{default}."\n" if $report->option->{$opt}{default};
-  }
-  print $string;
-}
-
-sub setupOptions(){
-  my @optList;
-  push @optList,"db=s";
-  push @optList,"help";
-  foreach my $opt (keys %{$report->option()}){
-    my $string = $opt;
-    $opt .= "=s" if $report->option->{$opt}{kind} ne "boolean";
-    push @optList,$opt;
-  }
-  GetOptions(\%options,@optList);
-  $dbPath = $options{db};
-  $help = $options{help};
-  foreach my $opt (keys %options){
-    next if $opt eq "db";
-    next if $opt eq "help";
-    $report->option->set($opt,$options{$opt});
-  }
-  # help message
-  print usage("") && exit () if ($help);
-  # open the database
-  my $db=openDatabase($dbPath);
-  $report->db($db);
-}
-
-#*******************************Packages**********************************************
-package convertIreport;
-use strict;
-
-sub new {
-   my($class) = @_;
-   my $self = bless({}, $class);
-    return $self;
-  }
-
-# Return the database associated with the report.
-sub db {
-    my $report = shift;
-    my $db = shift;
-    $report->{db}=$db if $db;
-    return $report->{db};
-}
-sub bgcolor {}
-sub bold {}
-sub entity {}
-sub fontbgcolor {}
-sub fontcolor {}
-sub hover {}
-sub italic {}
-sub nobold {}
-sub noitalic {}
-sub print {
-    my $report = shift;
-    my $text = shift;
-    my $treeDepth = $report->{depth};
-    my $prestring;
-    my $poststring;
-    if ($treeDepth){
-      $prestring = "|"x($treeDepth-1);
-      $poststring="\n";
-    }
-    #print $prestring.$text.$poststring;
-}
-sub progress {}
-sub syncfile {}
-sub tree {
-    my $report = shift;
-    my $depth = shift;
-    my $expand = shift;
-    $report->{depth}=$depth;
-}
-sub option {
-    my $report = shift;
-    if (! $report->{opt}){
-      $report->{opt} =  convertOption->new($report);
-    }
-    return $report->{opt};
-}
-
-1;
-package convertOption;
-use strict;
-
-# Class or object method. Return a new report object.
-sub new {
-   my($class, $db) = @_;
-   my $self = bless({}, $class);
-   $self->{db} = $db;
-    return $self;
-}
-
-
-sub checkbox       {
-  my ($self, $name, $desc )=@_;
-  $self->{$name} = { 
-    desc => $desc,
-    variable => "opt_$name",
-    kind  => "boolean",
-  };
-}
-
-sub checkbox_horiz {choice(@_);}
-sub checkbox_vert  {choice(@_);}
-sub choice{
-  my ($self, $name, $desc, $choices, $default )=@_;
-  $self->{$name} = { 
-    desc => $desc,
-    variable => "opt_$name",
-    kind  => "choice",
-    choices => $choices,
-    default => $default,
-    setting => $default,
-  };
-}
-sub directory      { text(@_,"directory");}
-sub file           { text(@_,"file");}
-sub integer        { text(@_,"integer");}
-sub label          { text(@_,"label");}
-sub lookup         {
-  my ($self, $name ) = @_;
-  return $self->{$name}{setting};
-}
-sub radio_horiz    {choice(@_);}
-sub radio_vert     {choice(@_);}
-sub set{
-  my ($self, $name, $value) = @_;
-  $self->{$name}{setting} = $value;
-}
-sub text{
-  my ($self, $name, $desc,$default, $kind) = @_;
-  $kind = "text" unless $kind;
-  $self->{$name} = { 
-    desc => $desc,
-    variable => "opt_$name",
-    kind  => $kind,
-    default => $default,
-    setting => $default,
-  };
-}
-
-1;
 #*******************************Core Packages**********************************************
 package fileObj;
 sub new{
