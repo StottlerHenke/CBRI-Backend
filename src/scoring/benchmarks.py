@@ -128,9 +128,9 @@ class BenchmarkGenerator:
             sub = dict()
             grades[item] = sub
             col = item + "_score"
-            sub['A'] = df_cases[col].quantile(0.75)
-            sub['B'] = df_cases[col].quantile(0.5)
-            sub['C'] = df_cases[col].quantile(0.25)
-            sub['D'] = df_cases[col].quantile(0.05)
+            sub['A'] = df_cases[col].quantile(0.9)
+            sub['B'] = df_cases[col].quantile(0.7)
+            sub['C'] = df_cases[col].quantile(0.3)
+            sub['D'] = df_cases[col].quantile(0.1)
 
         return grades
