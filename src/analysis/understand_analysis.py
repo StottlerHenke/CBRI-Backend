@@ -13,6 +13,8 @@ from lxml import html
 
 from cbri.reporting import logger
 
+DEBUG_UNDERSTAND = False
+
 CBRI_PLUGIN_DIR = "./src/analysis/"
 
 REPO_CODE_BASE_DIR = "./temp/code/"
@@ -256,7 +258,11 @@ def run_understand(project_name, lang, code_dir, data_dir, und_dir):
 
     # Generate core metrics to the specified output
     logger.info("\tCore metrics: " + code_dir)
-    uperl_command = uperl + " " + CBRI_PLUGIN_DIR + "CoreMetrics_v1.25.pl -db " + und_db + " -createMetrics -DuplicateMinLines 10 -outputDir " + data_dir
+    uperl_command = uperl + " " + CBRI_PLUGIN_DIR + "CoreMetrics_v1.26.pl -db " + und_db + " -createMetrics "
+    if DEBUG_UNDERSTAND:
+        uperl_command += "-createTestFiles "
+    uperl_command += "-DuplicateMinLines 10 -outputDir " + data_dir
+
     uperl_command_split = shlex.split(uperl_command)
     logger.info("Uperl command is:" +  str(uperl_command))
 
@@ -266,7 +272,7 @@ def run_understand(project_name, lang, code_dir, data_dir, und_dir):
 def run_checking_stdout_for_license(split_command, error_message_prefix):
     """
     This method attempts to abstract how calls to Understand binaries are
-    handled. Old versions of Understand (e.g. the legacy floating license server
+    handled. Old versipons of Understand (e.g. the legacy floating license server
     version used as late as 2018-04) would exit with nonzero error code on an
     invalid license; new versions exit "successfully", with diagnostic message
     in stdout instead.
@@ -298,13 +304,15 @@ def remove_directories_for_project(project_name, code_base_dir, data_base_dir, u
     if project_name:
         code_dir, data_dir, und_dir = get_directories_for_project(project_name, code_base_dir, data_base_dir, und_base_dir)
 
-        logger.info("\tDeleting the following 2 directories:\n\t%s\n\t%s"
-              % (code_dir, data_dir))
-
-        if os.path.isdir(code_dir):
-            shutil.rmtree(code_dir, onerror=on_rm_error)
-        if os.path.isdir(data_dir):
-            shutil.rmtree(data_dir, onerror=on_rm_error)
+        if DEBUG_UNDERSTAND:
+            logger.warn("DEBUG enabled - not deleting source directories")
+        else:
+            logger.info("\tDeleting the following 2 directories:\n\t%s\n\t%s"
+                        % (code_dir, data_dir))
+            if os.path.isdir(code_dir):
+                shutil.rmtree(code_dir, onerror=on_rm_error)
+            if os.path.isdir(data_dir):
+                shutil.rmtree(data_dir, onerror=on_rm_error)
 
 
 def on_rm_error(func, path, exc_info):

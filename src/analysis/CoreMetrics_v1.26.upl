@@ -27,7 +27,8 @@
 # 1.23 Add more decimal values to propagation cost
 # 1.24 Always show the core size metrics, even if not a core-periphery project
 # 1.25 Add secondary core groups - cyclic groups in the program that many other components interact with. Note in original papers 2019-09-06
-our $version = "1.25";
+# 1.26 Fix slashes in test files directory name
+our $version = "1.26";
 
 use strict;
 use Data::Dumper;
@@ -225,7 +226,7 @@ sub generate {
     add_progress($report,.02,"Saving DSM to output file");
     Understand::Gui::yield();
     return if $abort_called;
-    $outputFileName = $outputDir."\\1. $projectName Initial Design Structure Matrix.txt";
+    $outputFileName = $outputDir."${slash}1. $projectName Initial Design Structure Matrix.txt";
     printSquareMatrix(\@titlesList ,\@designStructureMatrix,$outputFileName);
   }
 
@@ -247,7 +248,7 @@ sub generate {
     add_progress($report,.02,"Print the Transitive Structure matrix to an output file");
     Understand::Gui::yield();
     return if $abort_called;
-    $outputFileName = $outputDir."\\2. $projectName Visibility Matrix.txt";
+    $outputFileName = $outputDir."${slash}2. $projectName Visibility Matrix.txt";
     printSquareMatrix(\@titlesList ,\@visibilityMatrix,$outputFileName);
    
   }
@@ -288,7 +289,7 @@ sub generate {
   }
 
   if($createTestFiles){   
-    $outputFileName = $outputDir."\\3. $projectName Visibility Fan In and Out.txt";
+    $outputFileName = $outputDir."${slash}3. $projectName Visibility Fan In and Out.txt";
     my $length = length longestItem(@titlesList);
     open (FILE,'>',"$outputFileName") || die ("Couldn't open $outputFileName $!\n");
       print FILE sprintf("%${length}s VFI VFO  Group   Size\n",'');
@@ -381,7 +382,7 @@ sub generate {
     add_progress($report,.02,"Print the Median matrix to an output file");
     return if $abort_called;
     Understand::Gui::yield();
-    $outputFileName = $outputDir."\\4. $projectName Median Matrix.txt";
+    $outputFileName = $outputDir."${slash}4. $projectName Median Matrix.txt";
     printSquareMatrix(\@medianTitles ,\@medianDSM,$outputFileName);
   }
 
@@ -444,7 +445,7 @@ sub generate {
       add_progress($report,.02,"Print the Core-Periphery matrix to an output file");
       return if $abort_called;
       Understand::Gui::yield();
-      $outputFileName = $outputDir."\\5. $projectName Core-Periphery Matrix.txt";
+      $outputFileName = $outputDir."${slash}5. $projectName Core-Periphery Matrix.txt";
       printSquareMatrix(\@coreTitles ,\@corePeripheryDSM,$outputFileName);
     }
   }
