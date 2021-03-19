@@ -1,5 +1,5 @@
 Django==2.2.6
-djangorestframework==3.10.3
+djangorestframework==3.11.2
 djangorestframework-jwt==1.11.0
 django-cors-middleware==1.4.0
 django-bleach==0.5.3
