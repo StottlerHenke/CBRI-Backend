@@ -7,7 +7,7 @@ django-enumfields==1.0.0
 drf-nested-routers==0.91
 pytz==2019.2
 GitPython==3.0.2
-lxml==4.4.1
+lxml==4.6.3
 pandas==0.25.1
 hgapi==1.7.4
 django-multi-email-field==0.5.1
